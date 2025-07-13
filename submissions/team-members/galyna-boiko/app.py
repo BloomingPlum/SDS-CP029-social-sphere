@@ -2,43 +2,125 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-def predict(sepal_l, sepal_w, petal_l, petal_w):
-    model = joblib.load('xgb_classifier.joblib')
-    data = np.expand_dims(np.array([sepal_l, sepal_w, petal_l, petal_w]), axis=0)
-    predictions = model.predict(data)
-    return predictions[0]
+###############################################################################
+# Configuration
+###############################################################################
 
-# Заголовок застосунку
-st.title('Класифікація квітів Ірису')
-st.markdown('Це проста модель для класифікації квітів ірису на три види: \
-setosa, versicolor, virginica')
-st.image('images/iris.png')
+DATA_PATH = "data.csv"          # <- your uploaded dataset (same folder as app)
+MODEL_PATH = "addiction_xgb.joblib"  # <- trained binary XGBoost model
+TARGET_COL = "Addicted_Score"       # numeric 0‑9, we binarise to Low/High
 
-# Відображення таблиці середніх значень
-st.header("Середні значення характеристик для кожного типу Ірису")
-iris_df = pd.read_csv("data/iris.csv")
-mean_values = iris_df.groupby('Species').mean().reset_index()
-st.dataframe(mean_values)
+# Threshold to split Low vs High addiction (change if you used something else)
+THRESHOLD = 6  # 0‑6 == Low, 7‑9 == High
 
-# Заголовок секції з характеристиками рослини
-st.header("Характеристики рослини")
-col1, col2 = st.columns(2)
+###############################################################################
+# Load data and derive feature lists
+###############################################################################
 
-# Введення характеристик чашолистків
-with col1:
-    st.text("Характеристики чашолистків (Sepal)")
-    sepal_l = st.slider('Довжина чашолистка (см)', 1.0, 8.0, 0.5)
-    sepal_w = st.slider('Ширина чашолистка (см)', 2.0, 4.4, 0.5)
+df = pd.read_csv(DATA_PATH)
 
-# Введення характеристик пелюсток
-with col2:
-    st.text("Характеристики пелюсток (Petal)")
-    petal_l = st.slider('Довжина пелюстки (см)', 1.0, 7.0, 0.5)
-    petal_w = st.slider('Ширина пелюстки (см)', 0.1, 2.5, 0.5)
+numeric_cols = [
+    "Age",
+    "Avg_Daily_Usage_Hours",
+    "Sleep_Hours_Per_Night",
+    "Mental_Health_Score",
+    "Conflicts_Over_Social_Media",
+]
 
-# Кнопка для прогнозування
-if st.button("Прогнозувати тип ірису"):
-    # Викликаємо функцію прогнозування
-    result = predict(sepal_l, sepal_w, petal_l, petal_w)
-    st.write(f"Прогнозований тип ірису: {result}")
+categoric_cols = [
+    "Gender",
+    "Academic_Level",
+    "Country",
+    "Most_Used_Platform",
+    "Affects_Academic_Performance",
+    "Relationship_Status",
+]
+
+input_cols = numeric_cols + categoric_cols
+
+###############################################################################
+# Helper functions
+###############################################################################
+
+def preprocess(user_input: pd.DataFrame) -> pd.DataFrame:
+    """Convert categories to category dtype so they match the model pipeline."""
+    for col in categoric_cols:
+        user_input[col] = user_input[col].astype("category")
+    return user_input[input_cols]
+
+
+def predict_addiction(user_input: pd.DataFrame):
+    """Return the string label (Low/High) predicted by the model."""
+    model = joblib.load(MODEL_PATH)
+    proba_high = model.predict_proba(user_input)[0, 1]
+    label = "High" if proba_high >= 0.5 else "Low"
+    return label, proba_high
+
+###############################################################################
+# Streamlit UI
+###############################################################################
+
+st.title("Social‑Media Addiction Classifier")
+st.markdown(
+    "This app predicts whether a student is **Low** or **High** on the "
+    "social‑media *Addicted Score* scale based on survey answers."
+)
+
+# Show basic dataset information
+with st.expander("Dataset summary"):
+    st.write("Total records:", len(df))
+    st.write("Addicted_Score distribution:")
+    st.bar_chart(df[TARGET_COL].value_counts().sort_index())
+
+    st.write("Average numeric features by addiction level:")
+    temp = df.assign(label=lambda x: np.where(x[TARGET_COL] >= THRESHOLD, "High", "Low"))
+    st.dataframe(temp.groupby("label")[numeric_cols].mean().round(2))
+
+st.header("Enter survey responses")
+
+with st.form("user_form"):
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        age = st.slider("Age", 15, 40, 20)
+        usage = st.slider("Avg daily social‑media use (hours)", 0.0, 12.0, 4.0, 0.1)
+        sleep = st.slider("Sleep hours per night", 0.0, 12.0, 7.0, 0.5)
+        mental = st.slider("Mental‑health self‑score (1‑10)", 1, 10, 6)
+        conflicts = st.slider("Conflicts over social media (count)", 0, 10, 2)
+
+    with col_right:
+        gender = st.selectbox("Gender", sorted(df["Gender"].dropna().unique()))
+        acad_level = st.selectbox("Academic level", sorted(df["Academic_Level"].dropna().unique()))
+        country = st.selectbox("Country", sorted(df["Country"].dropna().unique()))
+        platform = st.selectbox("Most‑used platform", sorted(df["Most_Used_Platform"].dropna().unique()))
+        affects = st.selectbox("Affects academic performance?", sorted(df["Affects_Academic_Performance"].dropna().unique()))
+        relation = st.selectbox("Relationship status", sorted(df["Relationship_Status"].dropna().unique()))
+
+    submitted = st.form_submit_button("Predict addiction level")
+
+if submitted:
+    user_df = pd.DataFrame(
+        {
+            "Age": [age],
+            "Avg_Daily_Usage_Hours": [usage],
+            "Sleep_Hours_Per_Night": [sleep],
+            "Mental_Health_Score": [mental],
+            "Conflicts_Over_Social_Media": [conflicts],
+            "Gender": [gender],
+            "Academic_Level": [acad_level],
+            "Country": [country],
+            "Most_Used_Platform": [platform],
+            "Affects_Academic_Performance": [affects],
+            "Relationship_Status": [relation],
+        }
+    )
+
+    processed = preprocess(user_df)
+    label, proba_high = predict_addiction(processed)
+
+    st.markdown(
+        f"### Predicted addiction level: **{label}**  \n"
+        f"Probability of *High* addiction: **{proba_high:.2%}**"
+    )
