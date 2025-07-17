@@ -1,126 +1,101 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+import os
 
-###############################################################################
-# Configuration
-###############################################################################
+# Paths
+DATA_PATH = os.path.join(os.path.dirname(__file__), "data.csv")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "addiction_xgb.joblib")
+TARGET_COL = 'Conflicts_Over_Social_Media_Binary'
 
-DATA_PATH = "data.csv"          # <- your uploaded dataset (same folder as app)
-MODEL_PATH = "addiction_xgb.joblib"  # <- trained binary XGBoost model
-TARGET_COL = "Addicted_Score"       # numeric 0‑9, we binarise to Low/High
-
-# Threshold to split Low vs High addiction (change if you used something else)
-THRESHOLD = 6  # 0‑6 == Low, 7‑9 == High
-
-###############################################################################
-# Load data and derive feature lists
-###############################################################################
-
+# Load data
 df = pd.read_csv(DATA_PATH)
 
-numeric_cols = [
-    "Age",
-    "Avg_Daily_Usage_Hours",
-    "Sleep_Hours_Per_Night",
-    "Mental_Health_Score",
-    "Conflicts_Over_Social_Media",
-]
+# Create derived target column
+df[TARGET_COL] = df["Conflicts_Over_Social_Media"].apply(lambda x: 0 if x <= 2 else 1).astype(int)
 
-categoric_cols = [
-    "Gender",
-    "Academic_Level",
-    "Country",
-    "Most_Used_Platform",
-    "Affects_Academic_Performance",
-    "Relationship_Status",
-]
+# Define columns to exclude from input
+exclude_cols = ['Student_ID', 'Conflicts_Over_Social_Media', TARGET_COL, 'Addicted_Score']
 
-input_cols = numeric_cols + categoric_cols
+# Identify numeric and categoric columns
+numeric_cols = df.select_dtypes(include='number').columns.difference(exclude_cols).tolist()
+categoric_cols = df.select_dtypes(include='object').columns.difference(exclude_cols).tolist()
 
-###############################################################################
-# Helper functions
-###############################################################################
+# Extract categories from real data
+sample_categories = {
+    col: sorted(df[col].dropna().unique().tolist()) for col in categoric_cols
+}
 
-def preprocess(user_input: pd.DataFrame) -> pd.DataFrame:
-    """Convert categories to category dtype so they match the model pipeline."""
-    for col in categoric_cols:
-        user_input[col] = user_input[col].astype("category")
-    return user_input[input_cols]
+# Load model
+model = joblib.load(MODEL_PATH)
 
-
-def predict_addiction(user_input: pd.DataFrame):
-    """Return the string label (Low/High) predicted by the model."""
-    model = joblib.load(MODEL_PATH)
-    proba_high = model.predict_proba(user_input)[0, 1]
-    label = "High" if proba_high >= 0.5 else "Low"
-    return label, proba_high
-
-###############################################################################
 # Streamlit UI
-###############################################################################
+st.title("📱 Predict Conflicts Over Social Media")
+st.write("Fill in the following details to see if social media use may be causing interpersonal conflicts.")
 
-st.title("Social‑Media Addiction Classifier")
-st.markdown(
-    "This app predicts whether a student is **Low** or **High** on the "
-    "social‑media *Addicted Score* scale based on survey answers."
-)
+user_data = {}
 
-# Show basic dataset information
-with st.expander("Dataset summary"):
-    st.write("Total records:", len(df))
-    st.write("Addicted_Score distribution:")
-    st.bar_chart(df[TARGET_COL].value_counts().sort_index())
+numeric_input_ranges = {
+    'Age': {'min': 18, 'max': 24, 'step': 1.0},
+    'Avg_Daily_Usage_Hours': {'min': 1.5, 'max': 8.5, 'step': 0.5},
+    'Sleep_Hours_Per_Night': {'min': 3.5, 'max': 10, 'step': 0.5},
+    'Mental_Health_Score': {'min': 4, 'max': 9, 'step': 1.0}
+}
 
-    st.write("Average numeric features by addiction level:")
-    temp = df.assign(label=lambda x: np.where(x[TARGET_COL] >= THRESHOLD, "High", "Low"))
-    st.dataframe(temp.groupby("label")[numeric_cols].mean().round(2))
 
-st.header("Enter survey responses")
+# Numeric input fields
+for col in numeric_cols:
+    params = numeric_input_ranges.get(col, {'min': 0.0, 'max': 100.0, 'step': 1.0})
 
-with st.form("user_form"):
-    col_left, col_right = st.columns(2)
+    min_val = float(params['min'])
+    max_val = float(params['max'])
+    step = float(params['step'])
 
-    with col_left:
-        age = st.slider("Age", 15, 40, 20)
-        usage = st.slider("Avg daily social‑media use (hours)", 0.0, 12.0, 4.0, 0.1)
-        sleep = st.slider("Sleep hours per night", 0.0, 12.0, 7.0, 0.5)
-        mental = st.slider("Mental‑health self‑score (1‑10)", 1, 10, 6)
-        conflicts = st.slider("Conflicts over social media (count)", 0, 10, 2)
+    # Default value: midpoint
+    default_val = round((min_val + max_val) / 2, 2)
 
-    with col_right:
-        gender = st.selectbox("Gender", sorted(df["Gender"].dropna().unique()))
-        acad_level = st.selectbox("Academic level", sorted(df["Academic_Level"].dropna().unique()))
-        country = st.selectbox("Country", sorted(df["Country"].dropna().unique()))
-        platform = st.selectbox("Most‑used platform", sorted(df["Most_Used_Platform"].dropna().unique()))
-        affects = st.selectbox("Affects academic performance?", sorted(df["Affects_Academic_Performance"].dropna().unique()))
-        relation = st.selectbox("Relationship status", sorted(df["Relationship_Status"].dropna().unique()))
-
-    submitted = st.form_submit_button("Predict addiction level")
-
-if submitted:
-    user_df = pd.DataFrame(
-        {
-            "Age": [age],
-            "Avg_Daily_Usage_Hours": [usage],
-            "Sleep_Hours_Per_Night": [sleep],
-            "Mental_Health_Score": [mental],
-            "Conflicts_Over_Social_Media": [conflicts],
-            "Gender": [gender],
-            "Academic_Level": [acad_level],
-            "Country": [country],
-            "Most_Used_Platform": [platform],
-            "Affects_Academic_Performance": [affects],
-            "Relationship_Status": [relation],
-        }
+    user_data[col] = st.slider(
+        f"{col}",
+        min_value=min_val,
+        max_value=max_val,
+        value=default_val,
+        step=step
     )
 
-    processed = preprocess(user_df)
-    label, proba_high = predict_addiction(processed)
+# Categorical input fields
+for col in categoric_cols:
+    user_data[col] = st.selectbox(f"{col}", sample_categories[col])
 
-    st.markdown(
-        f"### Predicted addiction level: **{label}**  \n"
-        f"Probability of *High* addiction: **{proba_high:.2%}**"
-    )
+
+
+# Prediction button
+if st.button("Predict Conflict"):
+    # ✅ Step 1: Create input dataframe
+    input_df = pd.DataFrame([user_data])
+
+    # ✅ Step 2: Convert categoricals to category dtype
+    input_df[categoric_cols] = input_df[categoric_cols].astype("category")
+
+    # ✅ Optional: Align with training category levels
+    for col in categoric_cols:
+        if col in df.columns:
+            input_df[col] = input_df[col].astype(
+                pd.CategoricalDtype(categories=df[col].dropna().unique())
+            )
+
+    # ✅ Step 3: Match column order to model
+    model_features = model.get_booster().feature_names
+    input_df = input_df[model_features]
+
+    # ✅ Step 4: Debug – Show input to model
+    st.subheader("🧾 Input to Model")
+    st.write(input_df)
+
+    # ✅ Step 5: Predict
+    prediction = model.predict(input_df)[0]
+    prob = model.predict_proba(input_df)[0][1]
+
+    # ✅ Step 6: Show output
+    label = "🚨 Conflicts are likely" if prediction == 1 else "✌️ Conflicts are unlikely"
+    st.success(f"Prediction: {label}")
+    st.info(f"Model confidence (probability of conflict): {prob:.2f}")
