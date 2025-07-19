@@ -9,21 +9,31 @@ from sklearn.manifold import TSNE
 
 st.set_page_config(layout="wide")
 
+# Debug information
+st.write("Current directory:", os.getcwd())
+st.write("Available files:", os.listdir("."))
+
 # ------------------------------------------------------------------#
 # 1. Load artefacts                                                  #
 # ------------------------------------------------------------------#
-BASE_DIR = os.path.dirname(__file__)
-
-# Load models and levels
-MODEL_CONFLICTS   = joblib.load(os.path.join(BASE_DIR, "binary_conflicts_xgb_v2.joblib"))
-MODEL_ADDICTION = joblib.load(os.path.join(BASE_DIR, "addiction_score_lin_reg_v2.joblib"))
-LEVELS_CONFLICTS  = joblib.load(os.path.join(BASE_DIR, "category_levels_v2.joblib"))
-FEATS_CONFLICTS   = MODEL_CONFLICTS.get_booster().feature_names
+# Load models and levels with error handling
+try:
+    MODEL_CONFLICTS = joblib.load("binary_conflicts_xgb_v2.joblib")
+    MODEL_ADDICTION = joblib.load("addiction_score_lin_reg_v2.joblib")
+    LEVELS_CONFLICTS = joblib.load("category_levels_v2.joblib")
+    FEATS_CONFLICTS = MODEL_CONFLICTS.get_booster().feature_names
+except Exception as e:
+    st.error(f"Error loading model files. Please check if all required files are in the correct location: {BASE_DIR}")
+    st.error(f"Specific error: {str(e)}")
+    st.stop()
 
 # ------------------------------------------------------------------#
 # 2. Sidebar Navigation                                              #
 # ------------------------------------------------------------------#
-st.sidebar.image("image.png", use_container_width=True)
+try:
+    st.sidebar.image("image.png", use_container_width=True)
+except Exception as e:
+    st.sidebar.warning("Sidebar image could not be loaded")
 
 st.sidebar.markdown("""
 ## Social Media Usage Analysis
@@ -128,8 +138,12 @@ elif page == "Clustering Analysis":
     """)
 
     # Data loading and preprocessing (if not yet loaded)
-    df = pd.read_csv(os.path.join(BASE_DIR, "data.csv"))
-    df = df.drop(['Student_ID'], axis=1)
+    try:
+        df = pd.read_csv("data.csv")
+        df = df.drop(['Student_ID'], axis=1)
+    except Exception as e:
+        st.error("Could not load data.csv file")
+        st.stop()
 
     # Numeric and categorical separation
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
