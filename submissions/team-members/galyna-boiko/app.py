@@ -9,18 +9,12 @@ from sklearn.manifold import TSNE
 
 st.set_page_config(layout="wide")
 
-# Debug information
-st.write("Current directory:", os.getcwd())
-
 # ------------------------------------------------------------------#
 # 1. Load artefacts                                                  #
 # ------------------------------------------------------------------#
 # Get the absolute path to the repository root
 REPO_ROOT = "/mount/src/sds-cp029-social-sphere"
 MODEL_PATH = os.path.join(REPO_ROOT, "submissions/team-members/galyna-boiko")
-
-st.write("Looking for model files in:", MODEL_PATH)
-st.write("Files available:", os.listdir(REPO_ROOT))
 
 # Load models and levels with error handling
 try:
