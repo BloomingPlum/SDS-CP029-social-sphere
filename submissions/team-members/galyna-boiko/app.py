@@ -15,17 +15,21 @@ st.write("Current directory:", os.getcwd())
 # ------------------------------------------------------------------#
 # 1. Load artefacts                                                  #
 # ------------------------------------------------------------------#
-# Define paths relative to the repository root
-MODEL_PATH = "submissions/team-members/galyna-boiko"
+# Get the absolute path to the repository root
+REPO_ROOT = "/mount/src/sds-cp029-social-sphere"
+MODEL_PATH = os.path.join(REPO_ROOT, "submissions/team-members/galyna-boiko")
+
+st.write("Looking for model files in:", MODEL_PATH)
+st.write("Files available:", os.listdir(REPO_ROOT))
 
 # Load models and levels with error handling
 try:
-    MODEL_CONFLICTS = joblib.load(f"{MODEL_PATH}/binary_conflicts_xgb_v2.joblib")
-    MODEL_ADDICTION = joblib.load(f"{MODEL_PATH}/addiction_score_lin_reg_v2.joblib")
-    LEVELS_CONFLICTS = joblib.load(f"{MODEL_PATH}/category_levels_v2.joblib")
+    MODEL_CONFLICTS = joblib.load(os.path.join(MODEL_PATH, "binary_conflicts_xgb_v2.joblib"))
+    MODEL_ADDICTION = joblib.load(os.path.join(MODEL_PATH, "addiction_score_lin_reg_v2.joblib"))
+    LEVELS_CONFLICTS = joblib.load(os.path.join(MODEL_PATH, "category_levels_v2.joblib"))
     FEATS_CONFLICTS = MODEL_CONFLICTS.get_booster().feature_names
 except Exception as e:
-    st.error(f"Error loading model files. Please check if all required files are in the correct location: {BASE_DIR}")
+    st.error(f"Error loading model files. Please check if all required files are in the correct location: {MODEL_PATH}")
     st.error(f"Specific error: {str(e)}")
     st.stop()
 
@@ -33,9 +37,9 @@ except Exception as e:
 # 2. Sidebar Navigation                                              #
 # ------------------------------------------------------------------#
 try:
-    st.sidebar.image(f"{MODEL_PATH}/image.png", use_container_width=True)
+    st.sidebar.image(os.path.join(MODEL_PATH, "image.png"), use_container_width=True)
 except Exception as e:
-    st.sidebar.warning("Sidebar image could not be loaded")
+    st.sidebar.warning(f"Sidebar image could not be loaded: {str(e)}")
 
 st.sidebar.markdown("""
 ## Social Media Usage Analysis
@@ -141,7 +145,7 @@ elif page == "Clustering Analysis":
 
     # Data loading and preprocessing (if not yet loaded)
     try:
-        df = pd.read_csv(f"{MODEL_PATH}/data.csv")
+        df = pd.read_csv(os.path.join(MODEL_PATH, "data.csv"))
         df = df.drop(['Student_ID'], axis=1)
     except Exception as e:
         st.error("Could not load data.csv file")
