@@ -15,9 +15,9 @@ st.set_page_config(layout="wide")
 BASE_DIR = os.path.dirname(__file__)
 
 # Load models and levels
-MODEL_CONFLICTS   = joblib.load(os.path.join(BASE_DIR, "binary_conflicts_xgb.joblib"))
-MODEL_ADDICTION = joblib.load(os.path.join(BASE_DIR, "addiction_score_lin_reg.joblib"))
-LEVELS_CONFLICTS  = joblib.load(os.path.join(BASE_DIR, "category_levels.joblib"))
+MODEL_CONFLICTS   = joblib.load(os.path.join(BASE_DIR, "binary_conflicts_xgb_v2.joblib"))
+MODEL_ADDICTION = joblib.load(os.path.join(BASE_DIR, "addiction_score_lin_reg_v2.joblib"))
+LEVELS_CONFLICTS  = joblib.load(os.path.join(BASE_DIR, "category_levels_v2.joblib"))
 FEATS_CONFLICTS   = MODEL_CONFLICTS.get_booster().feature_names
 
 # ------------------------------------------------------------------#
