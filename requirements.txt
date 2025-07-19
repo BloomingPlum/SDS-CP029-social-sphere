@@ -7,10 +7,8 @@ scikit-learn
 scipy
 statsmodels
 plotly
-plotly-express
 dash
 nbformat>=4.2.0
 streamlit
-pandas
-numpy
-plotly
+joblib
+xgboost
